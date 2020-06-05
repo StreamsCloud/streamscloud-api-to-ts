@@ -29,15 +29,16 @@ export class OpenApiToTs {
           if (typeName.endsWith('Response')) return this.getNamespace(NAMESPACES.$responses);
           return this.getNamespace(NAMESPACES.$models);
         };
+        if(!typeDefinition.type){
+          typeDefinition.type = OPEN_API_TYPES.object;
+        }
         const definition: IDeclaringTypeDefinition = {
           originalName: typeName,
           name: this.sanitizeTypeName(typeName),
           namespace: getNamespace()
         };
         Object.assign(definition, typeDefinition);
-        if(!definition.type){
-          definition.type = OPEN_API_TYPES.object;
-        }
+
         if (definition.enum) {
           definition.type = OPEN_API_TYPES.enum;
           if (!definition.name.endsWith('Enum')) {
@@ -84,7 +85,6 @@ export namespace ${this.getNamespace(NAMESPACES.$types)}{
       case OPEN_API_TYPES.enum:
         return this.generateEnumSchemaString(typeDefinition);
       default: {
-        debugger;
         typeDefinition.schemaString = `/*
                  * Error parsing object ${typeDefinition.originalName}: Unknown type
                  */`
@@ -321,7 +321,6 @@ export namespace ${this.getNamespace(NAMESPACES.$types)}{
           polyType.properties.splice(index, 1);
         }
       });
-      debugger;
       this.generateDeclaringTypeSchemaString(polyType);
     })
   }

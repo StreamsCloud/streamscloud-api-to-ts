@@ -14,7 +14,6 @@ class OpenApiToTs {
                 case OPEN_API_TYPES.enum:
                     return this.generateEnumSchemaString(typeDefinition);
                 default: {
-                    debugger;
                     typeDefinition.schemaString = `/*
                  * Error parsing object ${typeDefinition.originalName}: Unknown type
                  */`;
@@ -234,7 +233,6 @@ class OpenApiToTs {
                         polyType.properties.splice(index, 1);
                     }
                 });
-                debugger;
                 this.generateDeclaringTypeSchemaString(polyType);
             });
         };
@@ -265,15 +263,15 @@ class OpenApiToTs {
                         return this.getNamespace(NAMESPACES.$responses);
                     return this.getNamespace(NAMESPACES.$models);
                 };
+                if (!typeDefinition.type) {
+                    typeDefinition.type = OPEN_API_TYPES.object;
+                }
                 const definition = {
                     originalName: typeName,
                     name: this.sanitizeTypeName(typeName),
                     namespace: getNamespace()
                 };
                 Object.assign(definition, typeDefinition);
-                if (!definition.type) {
-                    definition.type = OPEN_API_TYPES.object;
-                }
                 if (definition.enum) {
                     definition.type = OPEN_API_TYPES.enum;
                     if (!definition.name.endsWith('Enum')) {
