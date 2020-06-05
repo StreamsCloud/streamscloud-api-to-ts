@@ -3,23 +3,18 @@ import { Utils } from './utils';
 
 export class OpenApiToTs {
   private allTypes: IDeclaringTypeDefinition[];
-  private endpoints: IEndpointDefinition[];
   private polymorphicTypes: IDeclaringTypeDefinition[] = [];
   private polymorphicTypesWithBase: IPolymorphicTypeWithBase[] = [];
 
   constructor(private namespacePrefix) {
   }
 
-  public parse(spec, isTest: boolean): string {
+  public parse(spec): string {
 
-    const tsIgnore = isTest ? '\n// @ts-ignore' : '';
     const output = [`
 /**
  * This file was auto-generated.
  * Do not make direct changes to the file.
- */${tsIgnore}
- import { autoinject } from 'aurelia-framework';${tsIgnore}
- import { DataContext } from 'resources/utils/data-context';
 `];
 
     try {
@@ -58,50 +53,6 @@ export class OpenApiToTs {
     }
     this.allTypes.sort((a, b) => a.name.localeCompare(b.name));
     this.allTypes.forEach(this.generateDeclaringTypeSchemaString);
-
-    try {
-      const paths = spec.paths;
-
-      this.endpoints = Object.entries(paths).map(([eTemplate, eDefinition]: [string, any]) => {
-        const templateParts = eTemplate.slice(1).split('/').filter(p => !!p && !p.includes('{'));
-        const controller = templateParts[0];
-        if (!controller) return null;
-        const [method, description] = Object.entries(eDefinition)[0];
-        const nameParts = templateParts.slice(1);
-        const name = nameParts.length ? nameParts.map(p => Utils.toUpperCamelCase(p)).join('') : method;
-        const definition: IEndpointDefinition = {
-          template: `${method.toUpperCase()} ${eTemplate}`,
-          name: Utils.toCamelCase(name),
-          controller,
-          method,
-          url: templateParts.map(p => Utils.toCamelCase(p)).join('/')
-        };
-        Object.assign(definition, description);
-        return definition;
-      }).filter(e => e);
-    } catch (e) {
-      console.error('Endpoints error: ' + e.toString())
-    }
-
-    this.endpoints.sort((a, b) => a.name.localeCompare(b.name));
-    this.endpoints.forEach(this.generateEndpointStringRepresentation);
-
-
-    output.push(`/* eslint-disable @typescript-eslint/no-namespace */
-    export namespace ${this.getNamespace(NAMESPACES.$api)}{`);
-    const endpointGroups = Utils.groupBy(this.endpoints, x => x.controller);
-    endpointGroups.sort((a, b) => a.key.localeCompare(b.key));
-    endpointGroups.forEach(g => {
-      output.push(`
-@autoinject()
-export class ${g.key} {
-  constructor(private dc: DataContext) {
-  }
-  ${g.values.map(v => v.stringRepresentation).join('\n\n')}
-  }
-`)
-    });
-    output.push('}');
 
     this.updatePolyTypesWithBase();
     const modelGroups = Utils.groupBy(this.allTypes, x => x.namespace);
@@ -198,131 +149,6 @@ export namespace ${this.getNamespace(NAMESPACES.$types)}{
     }
     sb.push('}');
     typeDefinition.schemaString = sb.join('\n');
-  };
-
-  private generateEndpointStringRepresentation = (endpoint: IEndpointDefinition) => {
-    const sb = [`// ${endpoint.template}`];
-    const methodParamParts = [];
-    let body: { paramName: string, schema: string, isFormData: boolean } = null;
-    if (endpoint.requestBody && endpoint.requestBody.content) {
-      const entries = Object.entries(endpoint.requestBody.content);
-      const jsonModel = entries.find(([mimeType]) => mimeType === 'application/json');
-      if (jsonModel) {
-        body = {
-          paramName: 'payload',
-          isFormData: false,
-          schema: this.typeToString(jsonModel[1]['schema'] as IOATypeDefinition)
-        };
-      }
-      const formModel = entries.find(([mimeType]) => mimeType === 'multipart/form-data');
-      if (formModel) {
-        const properties = this.parseObjectProperties(formModel[1]['schema'] as { properties: any });
-
-        const complexPropertyTypes = endpoint.parameters ?? [];
-        endpoint.parameters = null;
-
-        complexPropertyTypes.forEach(paramDef => {
-          const newProp = paramDef.schema;
-          newProp.propertyName = paramDef.name;
-          properties.push(newProp);
-        });
-        const anonymousTypeDefinition: IDeclaringTypeDefinition = {
-          originalName: 'anonymous',
-          name: 'anonymous',
-          namespace: null,
-          properties
-        };
-        this.generateInterfaceSchema(anonymousTypeDefinition, true);
-        body = { paramName: 'formModel', isFormData: true, schema: anonymousTypeDefinition.schemaString };
-      }
-    }
-
-    if (body) {
-      methodParamParts.push(`${body.paramName}: ${body.schema}`);
-    }
-
-    const queryParams: IParameterDefinition[] = (endpoint.parameters ?? []).filter(p => p.in === 'query');
-    if (queryParams.length) {
-      queryParams.forEach(param => {
-        const optionalMark = param.required ? '' : '?';
-        methodParamParts.push(`${param.name}${optionalMark}: ${this.typeToString(param.schema)}`);
-      })
-    }
-    const responseType = this.getResponseType(endpoint);
-    sb.push(`public ${endpoint.name}(${methodParamParts.join(', ')}):Promise<${responseType ?? 'void'}>{`);
-    const dcMethodParams = [`'${endpoint.url}'`];
-    let payloadGeneration = '';
-    if (['post', 'put'].includes(endpoint.method)) {
-      if (body) {
-        if (body.isFormData) {
-          const paramName = 'formData';
-          const formSb = [];
-          formSb.push(`const ${paramName} = new FormData();`);
-          formSb.push(`Object.entries(${body.paramName}).forEach(([key, value])=>{`);
-          formSb.push(`if (value instanceof Blob) {`);
-          formSb.push(`${paramName}.append(key, value);`);
-          formSb.push(`} else if (`);
-          formSb.push(`Array.isArray(value) && value.length && value[0] instanceof Blob`);
-          formSb.push(`){`);
-          formSb.push(`for (let blob of value as Blob[]) {`);
-          formSb.push(`${paramName}.append(key, blob);`);
-          formSb.push(`}`);
-          formSb.push(`} else {`);
-          formSb.push(`${paramName}.append(key, JSON.stringify(value));`);
-          formSb.push(`}`);
-          formSb.push('});');
-          payloadGeneration = formSb.join('\n');
-          dcMethodParams.push(paramName);
-        } else {
-          dcMethodParams.push(body.paramName);
-        }
-      } else {
-        dcMethodParams.push('null');
-      }
-
-    }
-    let paramsGeneration: string = null;
-    if (queryParams.length) {
-      const paramName = 'params';
-      const paramsSb = [];
-      const requiredParams = queryParams.filter(p => p.required);
-      paramsSb.push(`const ${paramName} = {${requiredParams.map(p => p.name).join(', ')}};`);
-      const optionalParams = queryParams.filter(p => !p.required);
-      optionalParams.forEach(param => {
-        paramsSb.push(`if(${param.name}!==undefined){
-                    ${paramName}['${param.name}'] = ${param.name};
-                }`)
-      });
-      paramsGeneration = paramsSb.join('\n');
-      dcMethodParams.push(paramName);
-    }
-    if (payloadGeneration) {
-      sb.push(payloadGeneration)
-    }
-    if (paramsGeneration) {
-      sb.push(paramsGeneration)
-    }
-    sb.push(`return this.dc.${endpoint.method}(${dcMethodParams.join(', ')});`);
-    sb.push('}');
-    endpoint.stringRepresentation = sb.join('\n');
-  };
-
-  private getResponseType = (endpoint: IEndpointDefinition): string => {
-    const types = [];
-    const responses = Object.entries(endpoint.responses);
-    responses.forEach(([code, body]) => {
-      const statusCode = parseInt(code);
-      if (statusCode < 200 || statusCode >= 300 || !body.content) return;
-
-      const entries = Object.entries(body.content);
-      const jsonModel = entries.find(([mimeType]) => mimeType === 'application/json');
-
-      if (!jsonModel || !jsonModel[1]['schema']) return;
-      types.push(this.typeToString(jsonModel[1]['schema'] as IOATypeDefinition));
-    });
-
-    if (!types.length) return 'void';
-    return types.join(' | ');
   };
 
   private typeToString = (definition: IOATypeDefinition): string => {
@@ -533,34 +359,6 @@ interface IOATypeDefinition {
   additionalProperties?: boolean | IOATypeDefinition;
 }
 
-interface IEndpointDefinition {
-  template: string;
-  controller: string;
-  name: string;
-  method: string;
-  url: string;
-
-  parameters?: IParameterDefinition[];
-  requestBody?: IComplexTypeDefinition;
-  responses?: Record<string, IComplexTypeDefinition>;
-
-
-  stringRepresentation?: string;
-}
-
-interface IComplexTypeDefinition {
-  name: string;
-  description: string;
-  content: Record<string, Record<string, IOATypeDefinition | { properties: any }>>;
-}
-
-interface IParameterDefinition {
-  name: string;
-  in: string;
-  required: boolean;
-  schema: IOATypeDefinition;
-}
-
 interface IPolymorphicTypeWithBase {
   typeName: string;
   baseTypeName: string;
@@ -576,7 +374,6 @@ enum PROP_TYPES_MAP {
 }
 
 enum NAMESPACES {
-  $api = 'api',
   $models = 'models',
   $requests = 'requests',
   $responses = 'responses',
