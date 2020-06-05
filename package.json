@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@types/node": "^13.5.3",
+    "package-version-git-tag": "^3.0.0",
     "typescript": "^3.7.5"
   }
 }
