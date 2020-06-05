@@ -15,6 +15,7 @@ export class OpenApiToTs {
 /**
  * This file was auto-generated.
  * Do not make direct changes to the file.
+**/
 `];
 
     try {
@@ -34,6 +35,9 @@ export class OpenApiToTs {
           namespace: getNamespace()
         };
         Object.assign(definition, typeDefinition);
+        if(!definition.type){
+          definition.type = OPEN_API_TYPES.object;
+        }
         if (definition.enum) {
           definition.type = OPEN_API_TYPES.enum;
           if (!definition.name.endsWith('Enum')) {
@@ -80,6 +84,7 @@ export namespace ${this.getNamespace(NAMESPACES.$types)}{
       case OPEN_API_TYPES.enum:
         return this.generateEnumSchemaString(typeDefinition);
       default: {
+        debugger;
         typeDefinition.schemaString = `/*
                  * Error parsing object ${typeDefinition.originalName}: Unknown type
                  */`
@@ -316,6 +321,7 @@ export namespace ${this.getNamespace(NAMESPACES.$types)}{
           polyType.properties.splice(index, 1);
         }
       });
+      debugger;
       this.generateDeclaringTypeSchemaString(polyType);
     })
   }
