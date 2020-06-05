@@ -1,0 +1,26 @@
+{
+  "name": "@communicator/community-api",
+  "version": "1.18.0",
+  "description": "",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "npx tsc -p tsconfig.json",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "push-package": "npm run build && npm run refreshVSToken && npm version minor -f && npm publish",
+    "refreshVSToken": "vsts-npm-auth -config .npmrc"
+  },
+  "author": "defor",
+  "license": "ISC",
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "fs": "0.0.1-security",
+    "node-fetch": "^2.6.0",
+    "prettier": "^1.19.1"
+  },
+  "devDependencies": {
+    "@types/node": "^13.5.3",
+    "typescript": "^3.7.5"
+  }
+}
