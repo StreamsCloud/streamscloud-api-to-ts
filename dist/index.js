@@ -22,7 +22,7 @@ function run() {
         const apiDef = yield fetch(isTestEnv ? 'https://localhost:60443/swagger/v1/swagger.json' : swaggerDocUrl).then(r => r.json());
         const schemaParser = new open_api_to_ts_1.OpenApiToTs(namespacePrefix);
         try {
-            const typesString = schemaParser.parse(apiDef);
+            const typesString = schemaParser.parse(apiDef, isTestEnv);
             if (isTestEnv) {
                 if (!fs.existsSync('output')) {
                     fs.mkdirSync('output');

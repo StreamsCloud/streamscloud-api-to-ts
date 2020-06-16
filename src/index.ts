@@ -14,7 +14,7 @@ async function run() {
 
   const schemaParser = new OpenApiToTs(namespacePrefix);
   try {
-    const typesString = schemaParser.parse(apiDef);
+    const typesString = schemaParser.parse(apiDef, isTestEnv);
     if (isTestEnv) {
       if (!fs.existsSync('output')) {
         fs.mkdirSync('output');
