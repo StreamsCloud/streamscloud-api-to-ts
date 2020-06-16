@@ -340,7 +340,12 @@ class OpenApiToTs {
             }
             return defs;
         };
-        this.sanitizeTypeName = (typeName) => typeName.replace(/DTO$/i, '').replace(/Request$/i, '').replace(/Response$/i, '');
+        this.sanitizeTypeName = (typeName) => typeName
+            .replace(/DTO$/i, '')
+            .replace(/Request$/i, '')
+            .replace(/Response$/i, '')
+            .replace(/Input$/i, '')
+            .replace(/Output$/i, '');
         this.updatePolyTypesWithBase = () => {
             if (!this.polymorphicTypesWithBase)
                 return;
@@ -381,10 +386,10 @@ class OpenApiToTs {
                 const getNamespace = () => {
                     if (typeDefinition.type !== OPEN_API_TYPES.object)
                         return this.getNamespace(NAMESPACES.$enums);
-                    if (typeName.endsWith('Request'))
-                        return this.getNamespace(NAMESPACES.$requests);
-                    if (typeName.endsWith('Response'))
-                        return this.getNamespace(NAMESPACES.$responses);
+                    if (typeName.endsWith('Request') || typeName.endsWith('Input'))
+                        return this.getNamespace(NAMESPACES.$inputs);
+                    if (typeName.endsWith('Response') || typeName.endsWith('Output'))
+                        return this.getNamespace(NAMESPACES.$outputs);
                     return this.getNamespace(NAMESPACES.$models);
                 };
                 if (!typeDefinition.type) {
@@ -490,8 +495,8 @@ var NAMESPACES;
 (function (NAMESPACES) {
     NAMESPACES["$api"] = "api";
     NAMESPACES["$models"] = "models";
-    NAMESPACES["$requests"] = "requests";
-    NAMESPACES["$responses"] = "responses";
+    NAMESPACES["$inputs"] = "inputs";
+    NAMESPACES["$outputs"] = "outputs";
     NAMESPACES["$enums"] = "enums";
     NAMESPACES["$types"] = "types";
 })(NAMESPACES || (NAMESPACES = {}));

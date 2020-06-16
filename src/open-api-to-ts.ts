@@ -29,8 +29,8 @@ export class OpenApiToTs {
         const getNamespace = () => {
           if (typeDefinition.type !== OPEN_API_TYPES.object) return this.getNamespace(NAMESPACES.$enums);
 
-          if (typeName.endsWith('Request')) return this.getNamespace(NAMESPACES.$requests);
-          if (typeName.endsWith('Response')) return this.getNamespace(NAMESPACES.$responses);
+          if (typeName.endsWith('Request') || typeName.endsWith('Input')) return this.getNamespace(NAMESPACES.$inputs);
+          if (typeName.endsWith('Response') || typeName.endsWith('Output')) return this.getNamespace(NAMESPACES.$outputs);
           return this.getNamespace(NAMESPACES.$models);
         };
         if(!typeDefinition.type){
@@ -479,7 +479,13 @@ export namespace ${this.getNamespace(NAMESPACES.$types)}{
     return defs;
   };
 
-  private sanitizeTypeName = (typeName: string) => typeName.replace(/DTO$/i, '').replace(/Request$/i, '').replace(/Response$/i, '')
+  private sanitizeTypeName = (typeName: string) =>
+    typeName
+      .replace(/DTO$/i, '')
+      .replace(/Request$/i, '')
+      .replace(/Response$/i, '')
+      .replace(/Input$/i, '')
+      .replace(/Output$/i, '')
 
   private updatePolyTypesWithBase = () => {
     if (!this.polymorphicTypesWithBase) return;
@@ -582,8 +588,8 @@ enum PROP_TYPES_MAP {
 enum NAMESPACES {
   $api = 'api',
   $models = 'models',
-  $requests = 'requests',
-  $responses = 'responses',
+  $inputs = 'inputs',
+  $outputs = 'outputs',
   $enums = 'enums',
   $types = 'types'
 }
