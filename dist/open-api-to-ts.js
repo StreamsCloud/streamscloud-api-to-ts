@@ -82,6 +82,127 @@ class OpenApiToTs {
             sb.push('}');
             typeDefinition.schemaString = sb.join('\n');
         };
+        this.generateEndpointStringRepresentation = (endpoint) => {
+            var _a, _b;
+            const sb = [`// ${endpoint.template}`];
+            const methodParamParts = [];
+            let body = null;
+            if (endpoint.requestBody && endpoint.requestBody.content) {
+                const entries = Object.entries(endpoint.requestBody.content);
+                const jsonModel = entries.find(([mimeType]) => mimeType === 'application/json');
+                if (jsonModel) {
+                    body = {
+                        paramName: 'payload',
+                        isFormData: false,
+                        schema: this.typeToString(jsonModel[1]['schema'])
+                    };
+                }
+                const formModel = entries.find(([mimeType]) => mimeType === 'multipart/form-data');
+                if (formModel) {
+                    const properties = this.parseObjectProperties(formModel[1]['schema']);
+                    const complexPropertyTypes = (_a = endpoint.parameters, (_a !== null && _a !== void 0 ? _a : []));
+                    endpoint.parameters = null;
+                    complexPropertyTypes.forEach(paramDef => {
+                        const newProp = paramDef.schema;
+                        newProp.propertyName = paramDef.name;
+                        properties.push(newProp);
+                    });
+                    const anonymousTypeDefinition = {
+                        originalName: 'anonymous',
+                        name: 'anonymous',
+                        namespace: null,
+                        properties
+                    };
+                    this.generateInterfaceSchema(anonymousTypeDefinition, true);
+                    body = { paramName: 'formModel', isFormData: true, schema: anonymousTypeDefinition.schemaString };
+                }
+            }
+            if (body) {
+                methodParamParts.push(`${body.paramName}: ${body.schema}`);
+            }
+            const queryParams = (_b = endpoint.parameters, (_b !== null && _b !== void 0 ? _b : [])).filter(p => p.in === 'query');
+            if (queryParams.length) {
+                queryParams.forEach(param => {
+                    const optionalMark = param.required ? '' : '?';
+                    methodParamParts.push(`${param.name}${optionalMark}: ${this.typeToString(param.schema)}`);
+                });
+            }
+            const responseType = this.getResponseType(endpoint);
+            sb.push(`public ${endpoint.name}(${methodParamParts.join(', ')}):Promise<${(responseType !== null && responseType !== void 0 ? responseType : 'void')}>{`);
+            const dcMethodParams = [`'${endpoint.url}'`];
+            let payloadGeneration = '';
+            if (['post', 'put'].includes(endpoint.method)) {
+                if (body) {
+                    if (body.isFormData) {
+                        const paramName = 'formData';
+                        const formSb = [];
+                        formSb.push(`const ${paramName} = new FormData();`);
+                        formSb.push(`Object.entries(${body.paramName}).forEach(([key, value])=>{`);
+                        formSb.push(`if (value instanceof Blob) {`);
+                        formSb.push(`${paramName}.append(key, value);`);
+                        formSb.push(`} else if (`);
+                        formSb.push(`Array.isArray(value) && value.length && value[0] instanceof Blob`);
+                        formSb.push(`){`);
+                        formSb.push(`for (let blob of value as Blob[]) {`);
+                        formSb.push(`${paramName}.append(key, blob);`);
+                        formSb.push(`}`);
+                        formSb.push(`} else {`);
+                        formSb.push(`${paramName}.append(key, JSON.stringify(value));`);
+                        formSb.push(`}`);
+                        formSb.push('});');
+                        payloadGeneration = formSb.join('\n');
+                        dcMethodParams.push(paramName);
+                    }
+                    else {
+                        dcMethodParams.push(body.paramName);
+                    }
+                }
+                else {
+                    dcMethodParams.push('null');
+                }
+            }
+            let paramsGeneration = null;
+            if (queryParams.length) {
+                const paramName = 'params';
+                const paramsSb = [];
+                const requiredParams = queryParams.filter(p => p.required);
+                paramsSb.push(`const ${paramName} = {${requiredParams.map(p => p.name).join(', ')}};`);
+                const optionalParams = queryParams.filter(p => !p.required);
+                optionalParams.forEach(param => {
+                    paramsSb.push(`if(${param.name}!==undefined){
+                    ${paramName}['${param.name}'] = ${param.name};
+                }`);
+                });
+                paramsGeneration = paramsSb.join('\n');
+                dcMethodParams.push(paramName);
+            }
+            if (payloadGeneration) {
+                sb.push(payloadGeneration);
+            }
+            if (paramsGeneration) {
+                sb.push(paramsGeneration);
+            }
+            sb.push(`return this.dc.${endpoint.method}(${dcMethodParams.join(', ')});`);
+            sb.push('}');
+            endpoint.stringRepresentation = sb.join('\n');
+        };
+        this.getResponseType = (endpoint) => {
+            const types = [];
+            const responses = Object.entries(endpoint.responses);
+            responses.forEach(([code, body]) => {
+                const statusCode = parseInt(code);
+                if (statusCode < 200 || statusCode >= 300 || !body.content)
+                    return;
+                const entries = Object.entries(body.content);
+                const jsonModel = entries.find(([mimeType]) => mimeType === 'application/json');
+                if (!jsonModel || !jsonModel[1]['schema'])
+                    return;
+                types.push(this.typeToString(jsonModel[1]['schema']));
+            });
+            if (!types.length)
+                return 'void';
+            return types.join(' | ');
+        };
         this.typeToString = (definition) => {
             if (!definition)
                 return '';
@@ -244,12 +365,15 @@ class OpenApiToTs {
             return `$${parsedNamespace}`;
         };
     }
-    parse(spec) {
+    parse(spec, isTest) {
+        const tsIgnore = isTest ? '\n// @ts-ignore' : '';
         const output = [`
 /**
  * This file was auto-generated.
  * Do not make direct changes to the file.
-**/
+ */${tsIgnore}
+ import { autoinject } from 'aurelia-framework';${tsIgnore}
+ import { DataContext } from 'resources/utils/data-context';
 `];
         try {
             const schemas = spec.components.schemas;
@@ -293,6 +417,47 @@ class OpenApiToTs {
         }
         this.allTypes.sort((a, b) => a.name.localeCompare(b.name));
         this.allTypes.forEach(this.generateDeclaringTypeSchemaString);
+        try {
+            const paths = spec.paths;
+            this.endpoints = Object.entries(paths).map(([eTemplate, eDefinition]) => {
+                const templateParts = eTemplate.slice(1).split('/').filter(p => !!p && !p.includes('{'));
+                const controller = templateParts[0];
+                if (!controller)
+                    return null;
+                const [method, description] = Object.entries(eDefinition)[0];
+                const nameParts = templateParts.slice(1);
+                const name = nameParts.length ? nameParts.map(p => utils_1.Utils.toUpperCamelCase(p)).join('') : method;
+                const definition = {
+                    template: `${method.toUpperCase()} ${eTemplate}`,
+                    name: utils_1.Utils.toCamelCase(name),
+                    controller,
+                    method,
+                    url: templateParts.map(p => utils_1.Utils.toCamelCase(p)).join('/')
+                };
+                Object.assign(definition, description);
+                return definition;
+            }).filter(e => e);
+        }
+        catch (e) {
+            console.error('Endpoints error: ' + e.toString());
+        }
+        this.endpoints.sort((a, b) => a.name.localeCompare(b.name));
+        this.endpoints.forEach(this.generateEndpointStringRepresentation);
+        output.push(`/* eslint-disable @typescript-eslint/no-namespace */
+    export namespace ${this.getNamespace(NAMESPACES.$api)}{`);
+        const endpointGroups = utils_1.Utils.groupBy(this.endpoints, x => x.controller);
+        endpointGroups.sort((a, b) => a.key.localeCompare(b.key));
+        endpointGroups.forEach(g => {
+            output.push(`
+@autoinject()
+export class ${g.key} {
+  constructor(private dc: DataContext) {
+  }
+  ${g.values.map(v => v.stringRepresentation).join('\n\n')}
+  }
+`);
+        });
+        output.push('}');
         this.updatePolyTypesWithBase();
         const modelGroups = utils_1.Utils.groupBy(this.allTypes, x => x.namespace);
         modelGroups.sort((a, b) => a.key.localeCompare(b.key));
@@ -323,6 +488,7 @@ var PROP_TYPES_MAP;
 })(PROP_TYPES_MAP || (PROP_TYPES_MAP = {}));
 var NAMESPACES;
 (function (NAMESPACES) {
+    NAMESPACES["$api"] = "api";
     NAMESPACES["$models"] = "models";
     NAMESPACES["$requests"] = "requests";
     NAMESPACES["$responses"] = "responses";
