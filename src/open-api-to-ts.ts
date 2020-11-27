@@ -256,7 +256,7 @@ export namespace ${this.getNamespace(NAMESPACES.$types)}{
     sb.push(`public ${endpoint.name}(${methodParamParts.join(', ')}):Promise<${responseType ?? 'void'}>{`);
     const dcMethodParams = [`'${endpoint.url}'`];
     let payloadGeneration = '';
-    if (['post', 'put'].includes(endpoint.method)) {
+    if (endpoint.method !== 'get') {
       if (body) {
         if (body.isFormData) {
           const paramName = 'formData';
