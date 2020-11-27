@@ -131,7 +131,7 @@ class OpenApiToTs {
             sb.push(`public ${endpoint.name}(${methodParamParts.join(', ')}):Promise<${(responseType !== null && responseType !== void 0 ? responseType : 'void')}>{`);
             const dcMethodParams = [`'${endpoint.url}'`];
             let payloadGeneration = '';
-            if (['post', 'put'].includes(endpoint.method)) {
+            if (endpoint.method !== 'get') {
                 if (body) {
                     if (body.isFormData) {
                         const paramName = 'formData';
