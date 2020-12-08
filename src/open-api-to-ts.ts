@@ -243,6 +243,9 @@ export namespace ${this.getNamespace(NAMESPACES.$types)}{
 
     if (body) {
       methodParamParts.push(`${body.paramName}: ${body.schema}`);
+      if (body.isFormData) {
+        methodParamParts.push('onUploadProgress?: (e: ProgressEvent<EventTarget>) => void');
+      }
     }
 
     const queryParams: IParameterDefinition[] = (endpoint.parameters ?? []).filter(p => p.in === 'query');
@@ -299,6 +302,12 @@ export namespace ${this.getNamespace(NAMESPACES.$types)}{
       });
       paramsGeneration = paramsSb.join('\n');
       dcMethodParams.push(paramName);
+    }
+    if (body?.isFormData) {
+      if (!queryParams.length) {
+        dcMethodParams.push('undefined');
+      }
+      dcMethodParams.push('onUploadProgress');
     }
     if (payloadGeneration) {
       sb.push(payloadGeneration)
