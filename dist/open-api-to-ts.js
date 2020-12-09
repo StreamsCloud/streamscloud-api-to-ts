@@ -83,7 +83,7 @@ class OpenApiToTs {
             typeDefinition.schemaString = sb.join('\n');
         };
         this.generateEndpointStringRepresentation = (endpoint) => {
-            var _a, _b, _c;
+            var _a, _b;
             const sb = [`// ${endpoint.template}`];
             const methodParamParts = [];
             let body = null;
@@ -119,9 +119,6 @@ class OpenApiToTs {
             }
             if (body) {
                 methodParamParts.push(`${body.paramName}: ${body.schema}`);
-                if (body.isFormData) {
-                    methodParamParts.push('onUploadProgress?: (e: ProgressEvent<EventTarget>) => void');
-                }
             }
             const queryParams = (_b = endpoint.parameters, (_b !== null && _b !== void 0 ? _b : [])).filter(p => p.in === 'query');
             if (queryParams.length) {
@@ -178,12 +175,6 @@ class OpenApiToTs {
                 });
                 paramsGeneration = paramsSb.join('\n');
                 dcMethodParams.push(paramName);
-            }
-            if ((_c = body) === null || _c === void 0 ? void 0 : _c.isFormData) {
-                if (!queryParams.length) {
-                    dcMethodParams.push('undefined');
-                }
-                dcMethodParams.push('onUploadProgress');
             }
             if (payloadGeneration) {
                 sb.push(payloadGeneration);
