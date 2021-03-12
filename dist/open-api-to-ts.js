@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.OpenApiToTs = void 0;
 const prettier = require("prettier");
 const utils_1 = require("./utils");
 class OpenApiToTs {
@@ -100,7 +101,7 @@ class OpenApiToTs {
                 const formModel = entries.find(([mimeType]) => mimeType === 'multipart/form-data');
                 if (formModel) {
                     const properties = this.parseObjectProperties(formModel[1]['schema']);
-                    const complexPropertyTypes = (_a = endpoint.parameters, (_a !== null && _a !== void 0 ? _a : []));
+                    const complexPropertyTypes = (_a = endpoint.parameters) !== null && _a !== void 0 ? _a : [];
                     endpoint.parameters = null;
                     complexPropertyTypes.forEach(paramDef => {
                         const newProp = paramDef.schema;
@@ -120,7 +121,7 @@ class OpenApiToTs {
             if (body) {
                 methodParamParts.push(`${body.paramName}: ${body.schema}`);
             }
-            const queryParams = (_b = endpoint.parameters, (_b !== null && _b !== void 0 ? _b : [])).filter(p => p.in === 'query');
+            const queryParams = ((_b = endpoint.parameters) !== null && _b !== void 0 ? _b : []).filter(p => p.in === 'query');
             if (queryParams.length) {
                 queryParams.forEach(param => {
                     const optionalMark = param.required ? '' : '?';
@@ -128,7 +129,7 @@ class OpenApiToTs {
                 });
             }
             const responseType = this.getResponseType(endpoint);
-            sb.push(`public ${endpoint.name}(${methodParamParts.join(', ')}):Promise<${(responseType !== null && responseType !== void 0 ? responseType : 'void')}>{`);
+            sb.push(`public ${endpoint.name}(${methodParamParts.join(', ')}):Promise<${responseType !== null && responseType !== void 0 ? responseType : 'void'}>{`);
             const dcMethodParams = [`'${endpoint.url}'`];
             let payloadGeneration = '';
             if (endpoint.method !== 'get') {
